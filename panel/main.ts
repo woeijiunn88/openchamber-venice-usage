@@ -147,7 +147,7 @@ const balanceBadgeHost = h('span', 'badge-host');
 balanceBadgeHost.hidden = true;
 balanceRow.append(balanceValue, balanceCaption, balanceBadgeHost);
 
-const balanceBadge = mountBadge(balanceBadgeHost, { label: 'blocked', tone: 'warning' });
+const balanceBadge = mountBadge(balanceBadgeHost, { label: 'blocked', tone: 'error' });
 
 const chatRow = h('div', 'chat-row');
 const chatK = h('span', 'chat-k', 'Chat');
@@ -526,7 +526,7 @@ function renderBalance(): void {
     : 'Loading the balance from Venice.';
   balanceCaption.textContent = balance ? balance.currency || 'USD' : 'USD';
   balanceBadgeHost.hidden = !(balance && !balance.canConsume);
-  if (balance && !balance.canConsume) balanceBadge.update({ label: 'blocked', tone: 'warning' });
+  if (balance && !balance.canConsume) balanceBadge.update({ label: 'blocked', tone: 'error' });
   if (balance) footRight.textContent = balance.key.source === 'env' ? 'key: env' : 'key: opencode.json';
   stamp.textContent = summary ? `updated ${fmtClock(summary.fetchedAt)}` : '';
   stamp.title = summary ? new Date(summary.fetchedAt).toLocaleString() : '';
