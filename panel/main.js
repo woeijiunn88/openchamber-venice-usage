@@ -2955,7 +2955,7 @@ ${fmtUsd(model.usd)} \xB7 ${units}
       return;
     }
     const listHost = h("div", "list-host");
-    paneBody.append(h("div", "card-k", `Charges \xB7 30 days \xB7 newest ${ledger.rows.length}`), listHost);
+    paneBody.append(h("div", "card-k", "Charges \xB7 30 days"), listHost);
     mountList(listHost, {
       ariaLabel: "Recent charges",
       selectedId: null,

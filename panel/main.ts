@@ -754,7 +754,7 @@ function renderLedger(): void {
     return;
   }
   const listHost = h('div', 'list-host');
-  paneBody.append(h('div', 'card-k', `Charges · 30 days · newest ${ledger.rows.length}`), listHost);
+  paneBody.append(h('div', 'card-k', 'Charges · 30 days'), listHost);
   mountList(listHost, {
     ariaLabel: 'Recent charges',
     selectedId: null,
