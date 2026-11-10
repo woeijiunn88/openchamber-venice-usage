@@ -1,0 +1,6 @@
+node_modules/
+*.log
+# Local-only development residue, never part of the extension
+preview/
+docs/
+panel/mock.ts
