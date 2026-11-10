@@ -35,6 +35,10 @@ Then four panes on native kit tabs:
   the billing ledger: `units` on `*-mtoken` SKUs are millions of tokens.
 - **Models** — every model with its share, unit count and token split
   (input / output / cache), followed by the same range split by API key.
+- **Sessions** — Venice spend per chat, from OpenCode's database: call count,
+  last activity and recorded cost. Click opens the chat, right-click copies
+  the session id. Labelled "OpenCode estimate": Venice's billing API has no
+  session id, so these figures are not the billed amounts.
 - **Ledger** — the newest 100 charges with their SKU, the largest charge on the
   page, and a count when the scan saw more than it returned. The pane scrolls
   with the panel; no inner scroll window.
@@ -142,6 +146,7 @@ Service routes:
 | `/key` | — | `/v1/api_keys/rate_limits` |
 | `/summary` | `days` 1..90 | `/v1/billing/usage-analytics?lookback=Nd` |
 | `/ledger` | `limit` 1..200, `days` 1..90 | `/v1/billing/usage-history?pageSize=1000&startTimestamp=&endTimestamp=` |
+| `/sessions` | `days` 1..365, `limit` 1..100 | local `opencode.db`, Venice-tagged messages, subagents rolled into their root |
 | `/session` | `id=ses_…` | local `opencode.db`, Venice-tagged messages only |
 | `/status` | — | derived from `/summary` + `/balance`, host-drawn card |
 

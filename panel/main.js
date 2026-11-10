@@ -2242,6 +2242,26 @@ ${GUEST_UI_LOOK_CSS}`;
   var applyTone = (node, tone2) => {
     setAttr(node, "data-tone", tone2 && tone2 !== "neutral" ? tone2 : null);
   };
+  var mountBadge = (root, initial) => {
+    ensureStyle(UI_CSS);
+    let props = initial;
+    const node = el("span", "oc-sdk oc-sdk-badge");
+    root.append(node);
+    const paint = () => {
+      setText(node, props.label);
+      applyTone(node, props.tone);
+    };
+    paint();
+    return {
+      update: (next) => {
+        props = { ...props, ...next };
+        paint();
+      },
+      dispose: () => {
+        node.remove();
+      }
+    };
+  };
 
   // node_modules/@openchamber/sdk/dist/ui/list.js
   var listCount = 0;
@@ -2406,7 +2426,10 @@ ${GUEST_UI_LOOK_CSS}`;
   var balanceRow = h("div", "balance-row");
   var balanceValue = h("span", "big", "\u2014");
   var balanceCaption = h("span", "caption", "balance USD");
-  balanceRow.append(balanceValue, balanceCaption);
+  var balanceBadgeHost = h("span", "badge-host");
+  balanceBadgeHost.hidden = true;
+  balanceRow.append(balanceValue, balanceCaption, balanceBadgeHost);
+  var balanceBadge = mountBadge(balanceBadgeHost, { label: "blocked", tone: "warning" });
   var chatRow = h("div", "chat-row");
   var chatK = h("span", "chat-k", "Chat");
   var chatCost = h("span", "chat-cost", "");
@@ -2457,6 +2480,7 @@ ${GUEST_UI_LOOK_CSS}`;
     items: [
       { id: "usage", label: "Usage" },
       { id: "models", label: "Models" },
+      { id: "sessions", label: "Sessions" },
       { id: "ledger", label: "Ledger" },
       { id: "limits", label: "Limits" }
     ],
@@ -2466,6 +2490,7 @@ ${GUEST_UI_LOOK_CSS}`;
       paneTabsHandle.update({ activeId: pane });
       render();
       if (pane === "ledger") void loadLedger();
+      if (pane === "sessions") void loadSessions();
       if (pane === "limits" && !key) void loadKey();
     }
   });
@@ -2479,7 +2504,11 @@ ${GUEST_UI_LOOK_CSS}`;
     onChange: (id) => {
       range = Number(id);
       rangeSelect.update({ value: id });
-      void loadSummary().then(() => render());
+      void loadSummary().then(() => {
+        if (pane === "sessions") return loadSessions();
+        render();
+        return void 0;
+      });
     }
   });
   var pane = "usage";
@@ -2490,6 +2519,7 @@ ${GUEST_UI_LOOK_CSS}`;
   var ledger = null;
   var key = null;
   var sessionUsage = null;
+  var sessionsView = null;
   var sessionFailed = false;
   var session = null;
   var loading = false;
@@ -2537,6 +2567,10 @@ ${GUEST_UI_LOOK_CSS}`;
     }
     sessionUsage = await request("/session", { id: session.id });
   }
+  async function loadSessions() {
+    sessionsView = await request("/sessions", { days: String(range), limit: "20" });
+    render();
+  }
   async function loadKey() {
     key = await request("/key");
     render();
@@ -2557,6 +2591,7 @@ ${GUEST_UI_LOOK_CSS}`;
         sessionFailed = true;
       });
       if (pane === "ledger") await loadLedger();
+      if (pane === "sessions") await loadSessions();
       showBanner(null);
       render();
     } catch (error) {
@@ -2617,6 +2652,9 @@ ${GUEST_UI_LOOK_CSS}`;
       if (n >= 1e6) return `${Number((n / 1e6).toFixed(n % 1e6 === 0 ? 0 : 1))}M`;
       return `${Number((n / 1e3).toFixed(0))}k`;
     });
+  }
+  function totalTokens(t) {
+    return t.input + t.output + t.reasoning + t.cacheRead + t.cacheWrite;
   }
   function fmtTokens(n) {
     if (n >= 1e6) return `${(n / 1e6).toFixed(2)}M`;
@@ -2717,7 +2755,9 @@ OpenCode accounting \xB7 right-click copies the session id`;
   function renderBalance() {
     balanceValue.textContent = balance ? fmtUsd(balance.usd) : "\u2014";
     balanceValue.title = balance ? `Prepaid USD credit on this key. ${balance.canConsume ? "Spendable now." : "Spending is blocked."} Venice caches the figure for up to 10 minutes.` : "Loading the balance from Venice.";
-    balanceCaption.textContent = balance ? balance.canConsume ? "USD \xB7 can spend" : "USD \xB7 blocked" : "USD";
+    balanceCaption.textContent = balance ? balance.currency || "USD" : "USD";
+    balanceBadgeHost.hidden = !(balance && !balance.canConsume);
+    if (balance && !balance.canConsume) balanceBadge.update({ label: "blocked", tone: "warning" });
     if (balance) footRight.textContent = balance.key.source === "env" ? "key: env" : "key: opencode.json";
     stamp.textContent = summary ? `updated ${fmtClock(summary.fetchedAt)}` : "";
     stamp.title = summary ? new Date(summary.fetchedAt).toLocaleString() : "";
@@ -2848,16 +2888,22 @@ OpenCode accounting \xB7 right-click copies the session id`;
       const stack = h("div", "stack");
       const legend = h("div", "legend");
       const base = ordered.reduce((sum, [, usd]) => sum + usd, 0) || 1;
-      ordered.forEach(([label, usd], index) => {
+      const tone2 = (label) => {
+        const key2 = label.toLowerCase();
+        if (key2 === "text") return "type-text";
+        if (key2 === "image") return "type-image";
+        if (key2 === "video") return "type-video";
+        return "type-other";
+      };
+      ordered.forEach(([label, usd]) => {
         const share = usd / base;
-        const seg = h("i");
+        const kind = tone2(label);
+        const seg = h("i", kind);
         seg.style.width = `${(share * 100).toFixed(2)}%`;
-        seg.style.opacity = String([0.85, 0.55, 0.32, 0.18][index] ?? 0.12);
         seg.title = `${label} \xB7 ${fmtUsd(usd)}`;
         stack.append(seg);
         const row = h("div", "legend-row");
-        const dot = h("span", "legend-dot");
-        dot.style.opacity = String([0.85, 0.55, 0.32, 0.18][index] ?? 0.12);
+        const dot = h("span", `legend-dot ${kind}`);
         row.append(dot, h("span", "legend-name", label), h("span", "legend-meta", `${Math.round(share * 100)}% \xB7 ${fmtUsd(usd)}`));
         row.title = `${label}: ${fmtUsd(usd)} of ${fmtUsd(base)} in this range (${Math.round(share * 100)}%). ${label === "Text" ? "Billed per token." : "Billed per image or second, so no token figure applies."}`;
         legend.append(row);
@@ -2947,6 +2993,42 @@ ${fmtUsd(model.usd)} \xB7 ${units}
         }))
       });
     }
+  }
+  function renderSessions() {
+    paneBody.textContent = "";
+    if (!sessionsView) {
+      paneBody.append(h("div", "loading", "Loading sessions\u2026"));
+      return;
+    }
+    const listHost = h("div", "list-host");
+    paneBody.append(h("div", "card-k", `Sessions \xB7 ${range} days \xB7 OpenCode estimate`), listHost);
+    mountList(listHost, {
+      ariaLabel: "Venice spend by chat",
+      selectedId: null,
+      onSelect: (id) => {
+        void hostClient().openSession(id);
+      },
+      emptyText: "No Venice calls in this range.",
+      items: sessionsView.sessions.map((row) => ({
+        id: row.id,
+        title: row.title,
+        subtitle: `${row.requests} calls \xB7 last ${fmtWhen(new Date(row.lastMessageAt).toISOString())}`,
+        meta: fmtUsd(row.cost)
+      }))
+    });
+    const rows = listHost.querySelectorAll(".oc-sdk-row");
+    sessionsView.sessions.forEach((row, index) => {
+      const el2 = rows[index];
+      if (!el2) return;
+      el2.title = `${row.title}
+${row.id}
+${row.requests} calls \xB7 ${fmtTokens(totalTokens(row.tokens))} tokens
+${fmtUsd(row.cost)} recorded by OpenCode \xB7 right-click copies the id`;
+      el2.addEventListener("contextmenu", (event) => {
+        event.preventDefault();
+        copySessionId(row.id);
+      });
+    });
   }
   function renderLedger() {
     paneBody.textContent = "";
@@ -3049,6 +3131,7 @@ Requests and tokens per minute allowed for this model on this key.`;
     toolbar.hidden = pane === "limits";
     if (pane === "usage") renderUsage();
     else if (pane === "models") renderModels();
+    else if (pane === "sessions") renderSessions();
     else if (pane === "ledger") renderLedger();
     else renderLimits();
   }

@@ -647,6 +647,102 @@ function buildSessionUsage(id: string): SessionUsage {
   }
 }
 
+// ---------------------------------------------------------------- sessions
+
+interface SessionRankRow {
+  id: string;
+  title: string;
+  cost: number;
+  requests: number;
+  tokens: { input: number; output: number; reasoning: number; cacheRead: number; cacheWrite: number };
+  startedAt: number;
+  lastMessageAt: number;
+}
+
+/**
+ * Per-chat Venetian usage from OpenCode's database. These are OpenCode's
+ * recorded costs, not Venice billing; the panel labels them as an estimate.
+ */
+function buildSessionRanking(days: number, limit: number): { ok: true; sessions: SessionRankRow[]; estimate: true } {
+  const path = openCodeDbPath();
+  if (!existsSync(path)) throw new UpstreamError(404, 'OpenCode database not found');
+  const since = Date.now() - days * 86_400_000;
+  const db = new DatabaseSync(path, { readOnly: true });
+  try {
+    const messages = db
+      .prepare('select session_id, data, time_created from session_message where time_created >= ?')
+      .all(since) as { session_id: string; data: string; time_created: number }[];
+    const meta = db.prepare('select id, parent_id, title, time_created from session_v2').all() as {
+      id: string;
+      parent_id: string | null;
+      title: string | null;
+      time_created: number | null;
+    }[];
+
+    const parentOf = new Map<string, string | null>();
+    const titles = new Map<string, string>();
+    const created = new Map<string, number>();
+    for (const row of meta) {
+      parentOf.set(row.id, row.parent_id ?? null);
+      if (row.title) titles.set(row.id, row.title);
+      if (row.time_created) created.set(row.id, row.time_created);
+    }
+
+    const rootOf = (id: string): string => {
+      let current = id;
+      for (let guard = 0; guard < 64; guard += 1) {
+        const parent = parentOf.get(current);
+        if (!parent) break;
+        current = parent;
+      }
+      return current;
+    };
+
+    const sessions = new Map<string, SessionRankRow>();
+    for (const row of messages) {
+      let payload: {
+        model?: { providerID?: string };
+        cost?: number;
+        tokens?: { input?: number; output?: number; reasoning?: number; cache?: { read?: number; write?: number } };
+      };
+      try {
+        payload = JSON.parse(row.data);
+      } catch {
+        continue;
+      }
+      if (payload?.model?.providerID !== 'venice') continue;
+
+      const root = rootOf(row.session_id);
+      const entry =
+        sessions.get(root) ??
+        ({
+          id: root,
+          title: titles.get(root) || root,
+          cost: 0,
+          requests: 0,
+          tokens: { input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 },
+          startedAt: created.get(root) ?? row.time_created,
+          lastMessageAt: 0,
+        } satisfies SessionRankRow);
+
+      entry.cost += num(payload.cost);
+      entry.requests += 1;
+      entry.tokens.input += num(payload.tokens?.input);
+      entry.tokens.output += num(payload.tokens?.output);
+      entry.tokens.reasoning += num(payload.tokens?.reasoning);
+      entry.tokens.cacheRead += num(payload.tokens?.cache?.read);
+      entry.tokens.cacheWrite += num(payload.tokens?.cache?.write);
+      entry.lastMessageAt = Math.max(entry.lastMessageAt, num(row.time_created));
+      sessions.set(root, entry);
+    }
+
+    const ranked = [...sessions.values()].sort((a, b) => b.cost - a.cost).slice(0, limit);
+    return { ok: true, sessions: ranked, estimate: true };
+  } finally {
+    db.close();
+  }
+}
+
 // ---------------------------------------------------------------- status
 
 interface StatusView {
@@ -787,6 +883,13 @@ const server = createServer((req: IncomingMessage, res: ServerResponse) => {
       if (url.pathname === '/summary') {
         const days = Math.min(Math.max(Number(url.searchParams.get('days') || 30) || 30, 1), 90);
         sendJson(res, 200, await buildSummary(days));
+        return;
+      }
+
+      if (url.pathname === '/sessions') {
+        const days = Math.min(Math.max(Number(url.searchParams.get('days') || 30) || 30, 1), 365);
+        const limit = Math.min(Math.max(Number(url.searchParams.get('limit') || 20) || 20, 1), 100);
+        sendJson(res, 200, buildSessionRanking(days, limit));
         return;
       }
 

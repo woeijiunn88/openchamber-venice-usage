@@ -436,6 +436,66 @@ function buildSessionUsage(id) {
     db?.close();
   }
 }
+function buildSessionRanking(days, limit) {
+  const path = openCodeDbPath();
+  if (!(0, import_node_fs.existsSync)(path)) throw new UpstreamError(404, "OpenCode database not found");
+  const since = Date.now() - days * 864e5;
+  const db = new import_node_sqlite.DatabaseSync(path, { readOnly: true });
+  try {
+    const messages = db.prepare("select session_id, data, time_created from session_message where time_created >= ?").all(since);
+    const meta = db.prepare("select id, parent_id, title, time_created from session_v2").all();
+    const parentOf = /* @__PURE__ */ new Map();
+    const titles = /* @__PURE__ */ new Map();
+    const created = /* @__PURE__ */ new Map();
+    for (const row of meta) {
+      parentOf.set(row.id, row.parent_id ?? null);
+      if (row.title) titles.set(row.id, row.title);
+      if (row.time_created) created.set(row.id, row.time_created);
+    }
+    const rootOf = (id) => {
+      let current = id;
+      for (let guard = 0; guard < 64; guard += 1) {
+        const parent = parentOf.get(current);
+        if (!parent) break;
+        current = parent;
+      }
+      return current;
+    };
+    const sessions = /* @__PURE__ */ new Map();
+    for (const row of messages) {
+      let payload;
+      try {
+        payload = JSON.parse(row.data);
+      } catch {
+        continue;
+      }
+      if (payload?.model?.providerID !== "venice") continue;
+      const root = rootOf(row.session_id);
+      const entry = sessions.get(root) ?? {
+        id: root,
+        title: titles.get(root) || root,
+        cost: 0,
+        requests: 0,
+        tokens: { input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 },
+        startedAt: created.get(root) ?? row.time_created,
+        lastMessageAt: 0
+      };
+      entry.cost += num(payload.cost);
+      entry.requests += 1;
+      entry.tokens.input += num(payload.tokens?.input);
+      entry.tokens.output += num(payload.tokens?.output);
+      entry.tokens.reasoning += num(payload.tokens?.reasoning);
+      entry.tokens.cacheRead += num(payload.tokens?.cache?.read);
+      entry.tokens.cacheWrite += num(payload.tokens?.cache?.write);
+      entry.lastMessageAt = Math.max(entry.lastMessageAt, num(row.time_created));
+      sessions.set(root, entry);
+    }
+    const ranked = [...sessions.values()].sort((a, b) => b.cost - a.cost).slice(0, limit);
+    return { ok: true, sessions: ranked, estimate: true };
+  } finally {
+    db.close();
+  }
+}
 function fmtTokensShort(n) {
   if (n >= 1e6) return `${(n / 1e6).toFixed(2)}M`;
   if (n >= 1e4) return `${(n / 1e3).toFixed(0)}K`;
@@ -544,6 +604,12 @@ var server = (0, import_node_http.createServer)((req, res) => {
       if (url.pathname === "/summary") {
         const days = Math.min(Math.max(Number(url.searchParams.get("days") || 30) || 30, 1), 90);
         sendJson(res, 200, await buildSummary(days));
+        return;
+      }
+      if (url.pathname === "/sessions") {
+        const days = Math.min(Math.max(Number(url.searchParams.get("days") || 30) || 30, 1), 365);
+        const limit = Math.min(Math.max(Number(url.searchParams.get("limit") || 20) || 20, 1), 100);
+        sendJson(res, 200, buildSessionRanking(days, limit));
         return;
       }
       if (url.pathname === "/session") {

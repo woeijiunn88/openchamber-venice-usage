@@ -35,6 +35,8 @@ html, body {
 .refresh-host { display: inline-flex; }
 
 .balance-row { display: flex; align-items: baseline; gap: 8px; margin-top: 2px; }
+.badge-host[hidden] { display: none; }
+
 .chat-row {
   display: flex;
   align-items: baseline;
@@ -201,3 +203,13 @@ html, body {
 .daily .axis { margin-top: 1px; }
 .daily .card-k { margin-bottom: 2px; }
 
+
+/* Spend-by-type palette, mapped to the host status tones the Work Status card uses. */
+.stack .type-text,
+.legend-dot.type-text { background: var(--oc-success, #3f8f5f); opacity: 1; }
+.stack .type-image,
+.legend-dot.type-image { background: var(--oc-info, #2563eb); opacity: 1; }
+.stack .type-video,
+.legend-dot.type-video { background: var(--oc-warning, #b45309); opacity: 1; }
+.stack .type-other,
+.legend-dot.type-other { background: var(--oc-muted, #6b7280); opacity: 1; }
