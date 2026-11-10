@@ -474,7 +474,7 @@ chatRow.setAttribute('aria-label', 'Current chat Venice usage. Enter opens the c
 
   chatCost.hidden = empty || failed;
   chatNote.hidden = !(empty || failed);
-  chatNote.textContent = empty ? 'no Venice usage' : failed ? 'chat data unavailable' : '';
+  chatNote.textContent = empty ? 'no usage' : failed ? 'chat data unavailable' : '';
   chatCost.textContent = usage ? (empty ? '' : fmtUsd(usage.cost)) : failed ? '' : '…';
 
   if (failed) {
@@ -486,7 +486,7 @@ chatRow.setAttribute('aria-label', 'Current chat Venice usage. Enter opens the c
     return;
   }
   if (empty) {
-    chatRow.title = `${session.title || session.id}\n${session.id}\nno Venice usage in this chat yet`;
+    chatRow.title = `${session.title || session.id}\n${session.id}\nno usage in this chat yet`;
     return;
   }
   const parts: string[] = [];

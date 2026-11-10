@@ -2702,7 +2702,7 @@ ${GUEST_UI_LOOK_CSS}`;
     const failed = !usage && sessionFailed;
     chatCost.hidden = empty || failed;
     chatNote.hidden = !(empty || failed);
-    chatNote.textContent = empty ? "no Venice usage" : failed ? "chat data unavailable" : "";
+    chatNote.textContent = empty ? "no usage" : failed ? "chat data unavailable" : "";
     chatCost.textContent = usage ? empty ? "" : fmtUsd(usage.cost) : failed ? "" : "\u2026";
     if (failed) {
       chatRow.title = `${session.title || session.id}
@@ -2718,7 +2718,7 @@ ${session.id}`;
     if (empty) {
       chatRow.title = `${session.title || session.id}
 ${session.id}
-no Venice usage in this chat yet`;
+no usage in this chat yet`;
       return;
     }
     const parts = [];
