@@ -783,7 +783,7 @@ async function buildStatusView(): Promise<StatusView> {
         label: 'Balance',
         value: fmtUsd(balance.usd),
         tooltip: `Prepaid USD credit, ${balance.canConsume ? 'spendable' : 'blocked'}. Venice caches billing figures for up to 10 minutes.`,
-        ...(balance.canConsume ? {} : { badge: { label: 'blocked', tone: 'warning' } }),
+        ...(balance.canConsume ? {} : { badge: { label: 'blocked', tone: 'error' } }),
       },
       {
         kind: 'line',
