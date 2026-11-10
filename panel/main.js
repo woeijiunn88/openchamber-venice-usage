@@ -3006,7 +3006,9 @@ ${fmtUsd(model.usd)} \xB7 ${units}
       ariaLabel: "Venice spend by chat",
       selectedId: null,
       onSelect: (id) => {
-        void hostClient().openSession(id);
+        void hostClient().openSession(id).catch(() => {
+          void hostClient().toast({ kind: "error", message: "Could not open that session", dismiss: true });
+        });
       },
       emptyText: "No Venice calls in this range.",
       items: sessionsView.sessions.map((row) => ({
